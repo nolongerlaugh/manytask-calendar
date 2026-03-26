@@ -45,3 +45,12 @@ jobs:
           git add manytask.ics
           git diff --cached --quiet || git commit -m "Update manytask.ics"
           git push
+
+      - name: Upload debug files
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manytask-debug
+          path: |
+            debug_*.html
+          if-no-files-found: ignore
