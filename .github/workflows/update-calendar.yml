@@ -33,6 +33,9 @@ jobs:
           EOF
 
       - name: Generate ICS
+        env:
+          MANYTASK_USERNAME: ${{ secrets.MANYTASK_USERNAME }}
+          MANYTASK_PASSWORD: ${{ secrets.MANYTASK_PASSWORD }}
         run: python manytask_to_ics.py
 
       - name: Commit updated ICS
