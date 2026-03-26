@@ -112,10 +112,30 @@ def build_calendar(events: list[Event]) -> str:
 
 
 async def scrape_manytask(page: Page) -> list[Event]:
-    await page.goto(MANYTASK_URL, wait_until="networkidle")
-    await page.wait_for_selector(".container-fluid.rounded.mt-lecture", timeout=15000)
+    await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
+    await page.wait_for_timeout(5000)
 
-    sections = page.locator(".container-fluid.rounded.mt-lecture")
+    # Если нас выбросило на логин или страница не та, покажем понятную ошибку
+    current_url = page.url
+    page_text = await page.locator("body").inner_text()
+
+    sections_locator = page.locator(".container-fluid.rounded.mt-lecture")
+
+    if await sections_locator.count() == 0:
+        if "login" in current_url.lower() or "sign in" in page_text.lower() or "log in" in page_text.lower():
+            raise RuntimeError(
+                f"Manytask session is no longer valid. Current URL: {current_url}"
+            )
+
+        # Сохраним кусок страницы для диагностики
+        html = await page.content()
+        Path("debug_manytask_page.html").write_text(html, encoding="utf-8")
+        raise RuntimeError(
+            f"Could not find Manytask sections. Current URL: {current_url}. "
+            f"Saved page HTML to debug_manytask_page.html"
+        )
+
+    sections = sections_locator
     events: list[Event] = []
 
     for i in range(await sections.count()):
@@ -170,12 +190,12 @@ async def scrape_manytask(page: Page) -> list[Event]:
             dt = parse_dt(values[0], values[1])
 
             description_parts = [f"Section: {section_title}"]
+            if task_name:
+                description_parts.append(f"Task: {task_name}")
             if status:
                 description_parts.append(f"Status: {status}")
             if percent is not None:
                 description_parts.append(f"Percent: {percent}%")
-            if task_url:
-                description_parts.append(f"URL: {task_url}")
 
             uid = stable_uid("manytask", section_title, task_name, dt.isoformat(), task_url)
 
