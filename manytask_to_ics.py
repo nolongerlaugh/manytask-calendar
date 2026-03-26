@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
+import os
 
 from playwright.async_api import async_playwright, Page
 
@@ -12,6 +13,8 @@ MANYTASK_URL = "https://app.manytask.org/cpp-2026-spring/"
 STATE_FILE = Path("manytask_state.json")
 OUTPUT_ICS = Path("manytask.ics")
 LOCAL_TZ = timezone(timedelta(hours=3))
+MANYTASK_USERNAME = os.environ.get("MANYTASK_USERNAME", "")
+MANYTASK_PASSWORD = os.environ.get("MANYTASK_PASSWORD", "")
 
 
 @dataclass
@@ -112,30 +115,10 @@ def build_calendar(events: list[Event]) -> str:
 
 
 async def scrape_manytask(page: Page) -> list[Event]:
-    await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
-    await page.wait_for_timeout(5000)
+    await page.goto(MANYTASK_URL, wait_until="networkidle")
+    await page.wait_for_selector(".container-fluid.rounded.mt-lecture", timeout=15000)
 
-    # Если нас выбросило на логин или страница не та, покажем понятную ошибку
-    current_url = page.url
-    page_text = await page.locator("body").inner_text()
-
-    sections_locator = page.locator(".container-fluid.rounded.mt-lecture")
-
-    if await sections_locator.count() == 0:
-        if "login" in current_url.lower() or "sign in" in page_text.lower() or "log in" in page_text.lower():
-            raise RuntimeError(
-                f"Manytask session is no longer valid. Current URL: {current_url}"
-            )
-
-        # Сохраним кусок страницы для диагностики
-        html = await page.content()
-        Path("debug_manytask_page.html").write_text(html, encoding="utf-8")
-        raise RuntimeError(
-            f"Could not find Manytask sections. Current URL: {current_url}. "
-            f"Saved page HTML to debug_manytask_page.html"
-        )
-
-    sections = sections_locator
+    sections = page.locator(".container-fluid.rounded.mt-lecture")
     events: list[Event] = []
 
     for i in range(await sections.count()):
@@ -190,12 +173,12 @@ async def scrape_manytask(page: Page) -> list[Event]:
             dt = parse_dt(values[0], values[1])
 
             description_parts = [f"Section: {section_title}"]
-            if task_name:
-                description_parts.append(f"Task: {task_name}")
             if status:
                 description_parts.append(f"Status: {status}")
             if percent is not None:
                 description_parts.append(f"Percent: {percent}%")
+            if task_url:
+                description_parts.append(f"URL: {task_url}")
 
             uid = stable_uid("manytask", section_title, task_name, dt.isoformat(), task_url)
 
@@ -204,7 +187,7 @@ async def scrape_manytask(page: Page) -> list[Event]:
                     uid=uid,
                     dtstart=dt,
                     dtend=dt + timedelta(hours=1),
-                    summary=f"[Manytask] {section_title}",
+                    summary=f"[Manytask] {task_name}",
                     description="\n".join(description_parts),
                     url=task_url,
                 )
@@ -214,15 +197,22 @@ async def scrape_manytask(page: Page) -> list[Event]:
 
 
 async def main() -> None:
-    if not STATE_FILE.exists():
-        raise FileNotFoundError("Не найден manytask_state.json")
-
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(storage_state=str(STATE_FILE))
+
+        if STATE_FILE.exists():
+            context = await browser.new_context(storage_state=str(STATE_FILE))
+        else:
+            context = await browser.new_context()
+
         page = await context.new_page()
 
-        events = await scrape_manytask(page)
+        try:
+            events = await scrape_manytask(page)
+        except Exception:
+            await login_manytask(page, context)
+            events = await scrape_manytask(page)
+
         ics = build_calendar(events)
         OUTPUT_ICS.write_text(ics, encoding="utf-8")
 
@@ -230,6 +220,55 @@ async def main() -> None:
 
     print(f"Saved {OUTPUT_ICS.resolve()}")
 
+
+
+async def login_manytask(page: Page, context) -> None:
+    if not MANYTASK_USERNAME or not MANYTASK_PASSWORD:
+        raise RuntimeError("Missing MANYTASK_USERNAME or MANYTASK_PASSWORD")
+
+    await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
+    await page.wait_for_timeout(2000)
+
+    # Если уже залогинены, ничего не делаем
+    if await page.locator(".container-fluid.rounded.mt-lecture").count() > 0:
+        return
+
+    # На странице manytask жмем кнопку login
+    login_button = page.locator("text=Login with").first
+    if await login_button.count() == 0:
+        raise RuntimeError(f"Could not find 'Login with' button on {page.url}")
+
+    await login_button.click()
+    await page.wait_for_load_state("domcontentloaded")
+    await page.wait_for_timeout(2000)
+
+    # Если редирект на gitlab не случился автоматически, пробуем перейти на страницу логина
+    # Дальше ищем gitlab поля
+    user_input = page.locator('input[name="username"], input[name="user[login]"], input[autocomplete="username"]').first
+    pass_input = page.locator('input[name="password"], input[name="user[password]"], input[type="password"]').first
+
+    if await user_input.count() == 0 or await pass_input.count() == 0:
+        raise RuntimeError(f"GitLab login form not found. Current URL: {page.url}")
+
+    await user_input.fill(MANYTASK_USERNAME)
+    await pass_input.fill(MANYTASK_PASSWORD)
+
+    sign_in_button = page.locator('button:has-text("Sign in"), input[type="submit"]').first
+    if await sign_in_button.count() == 0:
+        raise RuntimeError("GitLab sign in button not found")
+
+    await sign_in_button.click()
+    await page.wait_for_load_state("domcontentloaded")
+    await page.wait_for_timeout(5000)
+
+    # Возвращаемся на страницу курса
+    await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
+    await page.wait_for_timeout(5000)
+
+    if await page.locator(".container-fluid.rounded.mt-lecture").count() == 0:
+        raise RuntimeError(f"Login seemed to finish, but Manytask sections still not found. URL: {page.url}")
+
+    await context.storage_state(path=str(STATE_FILE))
 
 if __name__ == "__main__":
     asyncio.run(main())
