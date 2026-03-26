@@ -184,7 +184,7 @@ async def scrape_manytask(page: Page) -> list[Event]:
                     uid=uid,
                     dtstart=dt,
                     dtend=dt + timedelta(hours=1),
-                    summary=f"[Manytask] {task_name}",
+                    summary=f"[Manytask] {section_title}",
                     description="\n".join(description_parts),
                     url=task_url,
                 )
