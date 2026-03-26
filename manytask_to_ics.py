@@ -243,6 +243,7 @@ async def login_manytask(page: Page, context) -> None:
 
     await page.goto(login_href, wait_until="domcontentloaded")
     await page.wait_for_timeout(5000)
+    Path("debug_login_target_page.html").write_text(await page.content(), encoding="utf-8")
 
     user_input = None
     pass_input = None
