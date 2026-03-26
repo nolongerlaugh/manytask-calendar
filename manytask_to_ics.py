@@ -229,77 +229,10 @@ async def login_manytask(page: Page, context) -> None:
     if not MANYTASK_USERNAME or not MANYTASK_PASSWORD:
         raise RuntimeError("Missing MANYTASK_USERNAME or MANYTASK_PASSWORD")
 
-    await page.goto("https://app.manytask.org/", wait_until="domcontentloaded")
+    # 1) Сразу идем на GitLab login, минуя кнопку Login with на Manytask
+    await page.goto("https://gitlab.manytask.org/users/sign_in", wait_until="domcontentloaded")
     await page.wait_for_timeout(3000)
 
-    # Если уже залогинены и на странице курса есть секции — выходим
-    await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
-    await page.wait_for_timeout(3000)
-    if await page.locator(".container-fluid.rounded.mt-lecture").count() > 0:
-        await context.storage_state(path=str(STATE_FILE))
-        return
-
-    # Возвращаемся на главную Manytask
-    await page.goto("https://app.manytask.org/", wait_until="domcontentloaded")
-    await page.wait_for_timeout(3000)
-
-    # Для диагностики
-    Path("debug_before_login.html").write_text(await page.content(), encoding="utf-8")
-
-    # Ищем ссылку/кнопку логина более гибко
-    login_candidates = [
-        'a:has-text("Login with")',
-        'button:has-text("Login with")',
-        'text=Login with',
-        'a[href*="gitlab"]',
-        'a[href*="sign_in"]',
-        'a[href*="login"]',
-    ]
-
-    clicked = False
-
-    for selector in login_candidates:
-        loc = page.locator(selector).first
-        if await loc.count() == 0:
-            continue
-
-        href = await loc.get_attribute("href")
-
-        # Если это обычная ссылка — лучше перейти напрямую по href
-        if href:
-            if href.startswith("/"):
-                href = "https://app.manytask.org" + href
-            await page.goto(href, wait_until="domcontentloaded")
-            await page.wait_for_timeout(3000)
-            clicked = True
-            break
-
-        # Иначе пробуем клик
-        try:
-            async with page.expect_navigation(wait_until="domcontentloaded", timeout=5000):
-                await loc.click()
-            await page.wait_for_timeout(3000)
-            clicked = True
-            break
-        except Exception:
-            try:
-                await loc.click()
-                await page.wait_for_timeout(3000)
-                clicked = True
-                break
-            except Exception:
-                pass
-
-    if not clicked:
-        Path("debug_login_not_clicked.html").write_text(await page.content(), encoding="utf-8")
-        raise RuntimeError(f"Could not click login entrypoint. Current URL: {page.url}")
-
-    # Если после клика мы все еще на manytask, сохраняем страницу для диагностики
-    if "app.manytask.org" in page.url:
-        Path("debug_after_click.html").write_text(await page.content(), encoding="utf-8")
-
-    # Иногда логин открывается в той же вкладке, иногда через редирект
-    # Ищем gitlab-поля на текущей странице
     user_input = page.locator(
         'input[name="username"], input[name="user[login]"], input[autocomplete="username"]'
     ).first
@@ -307,47 +240,43 @@ async def login_manytask(page: Page, context) -> None:
         'input[name="password"], input[name="user[password]"], input[type="password"]'
     ).first
 
-    # Если формы нет, попробуем явно открыть gitlab sign-in,
-    # если текущий url уже на gitlab.manytask.org
     if await user_input.count() == 0 or await pass_input.count() == 0:
-        if "gitlab.manytask.org" in page.url:
-            await page.goto("https://gitlab.manytask.org/users/sign_in", wait_until="domcontentloaded")
-            await page.wait_for_timeout(3000)
-
-            user_input = page.locator(
-                'input[name="username"], input[name="user[login]"], input[autocomplete="username"]'
-            ).first
-            pass_input = page.locator(
-                'input[name="password"], input[name="user[password]"], input[type="password"]'
-            ).first
-
-    if await user_input.count() == 0 or await pass_input.count() == 0:
-        Path("debug_gitlab_form_not_found.html").write_text(await page.content(), encoding="utf-8")
+        Path("debug_gitlab_login_page.html").write_text(await page.content(), encoding="utf-8")
         raise RuntimeError(f"GitLab login form not found. Current URL: {page.url}")
 
     await user_input.fill(MANYTASK_USERNAME)
     await pass_input.fill(MANYTASK_PASSWORD)
+
+    remember_me = page.locator(
+        'input[type="checkbox"][name="remember_me"], input[type="checkbox"][name="user[remember_me]"]'
+    ).first
+    if await remember_me.count() > 0:
+        try:
+            await remember_me.check()
+        except Exception:
+            pass
 
     sign_in_button = page.locator(
         'button:has-text("Sign in"), input[type="submit"], button[type="submit"]'
     ).first
 
     if await sign_in_button.count() == 0:
-        Path("debug_signin_button_not_found.html").write_text(await page.content(), encoding="utf-8")
+        Path("debug_gitlab_signin_button.html").write_text(await page.content(), encoding="utf-8")
         raise RuntimeError(f"GitLab sign in button not found. Current URL: {page.url}")
 
     await sign_in_button.click()
     await page.wait_for_load_state("domcontentloaded")
     await page.wait_for_timeout(5000)
 
-    # После логина идем на страницу курса
+    # 2) После логина открываем Manytask курс
     await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
     await page.wait_for_timeout(5000)
 
-    if await page.locator(".container-fluid.rounded.mt-lecture").count() == 0:
-        Path("debug_after_login.html").write_text(await page.content(), encoding="utf-8")
+    sections = page.locator(".container-fluid.rounded.mt-lecture")
+    if await sections.count() == 0:
+        Path("debug_after_gitlab_login.html").write_text(await page.content(), encoding="utf-8")
         raise RuntimeError(
-            f"Login finished, but course sections still not found. Current URL: {page.url}"
+            f"Logged into GitLab, but Manytask sections still not found. Current URL: {page.url}"
         )
 
     await context.storage_state(path=str(STATE_FILE))
