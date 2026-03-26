@@ -210,16 +210,17 @@ async def extract_login_href(page: Page) -> str:
 
     href = await page.evaluate("""
     () => {
+      const loginLink = document.querySelector('a[href="/login"]');
+      if (loginLink) return loginLink.href;
+
       const anchors = Array.from(document.querySelectorAll('a[href]'));
       for (const a of anchors) {
         const text = (a.innerText || a.textContent || '').trim();
         const href = a.getAttribute('href') || '';
         if (
-          text.includes('Login with') ||
-          href.includes('gitlab') ||
-          href.includes('oauth') ||
-          href.includes('sign_in') ||
-          href.includes('users/auth')
+          text.includes('Login') ||
+          href === '/login' ||
+          href.includes('/login')
         ) {
           return a.href;
         }
@@ -241,14 +242,23 @@ async def login_manytask(page: Page, context) -> None:
     login_href = await extract_login_href(page)
 
     await page.goto(login_href, wait_until="domcontentloaded")
-    await page.wait_for_timeout(3000)
+    await page.wait_for_timeout(5000)
 
-    user_input = page.locator(
-        'input[name="username"], input[name="user[login]"], input[autocomplete="username"]'
-    ).first
-    pass_input = page.locator(
-        'input[name="password"], input[name="user[password]"], input[type="password"]'
-    ).first
+    user_input = None
+    pass_input = None
+
+    for _ in range(3):
+        user_input = page.locator(
+            'input[name="username"], input[name="user[login]"], input[autocomplete="username"]'
+        ).first
+        pass_input = page.locator(
+            'input[name="password"], input[name="user[password]"], input[type="password"]'
+        ).first
+
+        if await user_input.count() > 0 and await pass_input.count() > 0:
+            break
+
+        await page.wait_for_timeout(2000)
 
     if await user_input.count() == 0 or await pass_input.count() == 0:
         Path("debug_login_target_page.html").write_text(await page.content(), encoding="utf-8")
