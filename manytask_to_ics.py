@@ -11,6 +11,7 @@ from playwright.async_api import async_playwright, Page
 
 MANYTASK_URL = "https://app.manytask.org/cpp-2026-spring/"
 MANYTASK_SIGNUP_URL = "https://app.manytask.org/signup"
+MANYTASK_LOGIN_URL = "https://app.manytask.org/login"
 STATE_FILE = Path("manytask_state.json")
 OUTPUT_ICS = Path("manytask.ics")
 LOCAL_TZ = timezone(timedelta(hours=3))
@@ -116,6 +117,14 @@ def build_calendar(events: list[Event]) -> str:
     return "\r\n".join(body)
 
 
+async def is_course_page(page: Page) -> bool:
+    return await page.locator(".container-fluid.rounded.mt-lecture").count() > 0
+
+
+async def is_course_list_page(page: Page) -> bool:
+    return await page.locator('a.course-link[href="/cpp-2026-spring/"]').count() > 0
+
+
 async def scrape_manytask(page: Page) -> list[Event]:
     await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
     await page.wait_for_timeout(5000)
@@ -201,105 +210,81 @@ async def scrape_manytask(page: Page) -> list[Event]:
     return events
 
 
-async def extract_login_href(page: Page) -> str:
-    await page.goto(MANYTASK_SIGNUP_URL, wait_until="domcontentloaded")
-    await page.wait_for_timeout(3000)
-
-    html = await page.content()
-    Path("debug_signup_page.html").write_text(html, encoding="utf-8")
-
-    href = await page.evaluate("""
-    () => {
-      const loginLink = document.querySelector('a[href="/login"]');
-      if (loginLink) return loginLink.href;
-
-      const anchors = Array.from(document.querySelectorAll('a[href]'));
-      for (const a of anchors) {
-        const text = (a.innerText || a.textContent || '').trim();
-        const href = a.getAttribute('href') || '';
-        if (
-          text.includes('Login') ||
-          href === '/login' ||
-          href.includes('/login')
-        ) {
-          return a.href;
-        }
-      }
-      return null;
-    }
-    """)
-
-    if not href:
-        raise RuntimeError("Could not extract login href from Manytask signup page")
-
-    return href
-
-
 async def login_manytask(page: Page, context) -> None:
-    if not MANYTASK_USERNAME or not MANYTASK_PASSWORD:
-        raise RuntimeError("Missing MANYTASK_USERNAME or MANYTASK_PASSWORD")
-
-    login_href = await extract_login_href(page)
-
-    await page.goto(login_href, wait_until="domcontentloaded")
+    # 1) Пробуем штатный manytask login flow
+    await page.goto(MANYTASK_LOGIN_URL, wait_until="domcontentloaded")
     await page.wait_for_timeout(5000)
+
     Path("debug_login_target_page.html").write_text(await page.content(), encoding="utf-8")
 
-    user_input = None
-    pass_input = None
+    # 2) Если сразу попали в список курсов — просто открываем нужный курс
+    if await is_course_list_page(page):
+        await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
+        await page.wait_for_timeout(5000)
 
-    for _ in range(3):
-        user_input = page.locator(
-            'input[name="username"], input[name="user[login]"], input[autocomplete="username"]'
-        ).first
-        pass_input = page.locator(
-            'input[name="password"], input[name="user[password]"], input[type="password"]'
-        ).first
+        if await is_course_page(page):
+            await context.storage_state(path=str(STATE_FILE))
+            return
 
-        if await user_input.count() > 0 and await pass_input.count() > 0:
-            break
+    # 3) Если сразу попали на сам курс — отлично
+    if await is_course_page(page):
+        await context.storage_state(path=str(STATE_FILE))
+        return
 
-        await page.wait_for_timeout(2000)
-
-    if await user_input.count() == 0 or await pass_input.count() == 0:
-        Path("debug_login_target_page.html").write_text(await page.content(), encoding="utf-8")
-        raise RuntimeError(f"GitLab login form not found. Current URL: {page.url}")
-
-    await user_input.fill(MANYTASK_USERNAME)
-    await pass_input.fill(MANYTASK_PASSWORD)
-
-    remember_me = page.locator(
-        'input[type="checkbox"][name="remember_me"], input[type="checkbox"][name="user[remember_me]"]'
+    # 4) Если показали GitLab форму — логинимся
+    user_input = page.locator(
+        'input[name="username"], input[name="user[login]"], input[autocomplete="username"]'
     ).first
-    if await remember_me.count() > 0:
-        try:
-            await remember_me.check()
-        except Exception:
-            pass
-
-    sign_in_button = page.locator(
-        'button:has-text("Sign in"), input[type="submit"], button[type="submit"]'
+    pass_input = page.locator(
+        'input[name="password"], input[name="user[password]"], input[type="password"]'
     ).first
 
-    if await sign_in_button.count() == 0:
-        Path("debug_signin_button.html").write_text(await page.content(), encoding="utf-8")
-        raise RuntimeError(f"GitLab sign in button not found. Current URL: {page.url}")
+    if await user_input.count() > 0 and await pass_input.count() > 0:
+        if not MANYTASK_USERNAME or not MANYTASK_PASSWORD:
+            raise RuntimeError("Missing MANYTASK_USERNAME or MANYTASK_PASSWORD")
 
-    await sign_in_button.click()
-    await page.wait_for_load_state("domcontentloaded")
-    await page.wait_for_timeout(5000)
+        await user_input.fill(MANYTASK_USERNAME)
+        await pass_input.fill(MANYTASK_PASSWORD)
 
+        remember_me = page.locator(
+            'input[type="checkbox"][name="remember_me"], input[type="checkbox"][name="user[remember_me]"]'
+        ).first
+        if await remember_me.count() > 0:
+            try:
+                await remember_me.check()
+            except Exception:
+                pass
+
+        sign_in_button = page.locator(
+            'button:has-text("Sign in"), input[type="submit"], button[type="submit"]'
+        ).first
+
+        if await sign_in_button.count() == 0:
+            Path("debug_signin_button.html").write_text(await page.content(), encoding="utf-8")
+            raise RuntimeError(f"GitLab sign in button not found. Current URL: {page.url}")
+
+        await sign_in_button.click()
+        await page.wait_for_load_state("domcontentloaded")
+        await page.wait_for_timeout(5000)
+
+        if await is_course_list_page(page) or await is_course_page(page):
+            await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
+            await page.wait_for_timeout(5000)
+
+            if await is_course_page(page):
+                await context.storage_state(path=str(STATE_FILE))
+                return
+
+    # 5) Последняя попытка: вдруг после /login уже есть доступ к курсу
     await page.goto(MANYTASK_URL, wait_until="domcontentloaded")
     await page.wait_for_timeout(5000)
 
-    sections = page.locator(".container-fluid.rounded.mt-lecture")
-    if await sections.count() == 0:
-        Path("debug_after_login.html").write_text(await page.content(), encoding="utf-8")
-        raise RuntimeError(
-            f"Login completed, but Manytask sections still not found. Current URL: {page.url}"
-        )
+    if await is_course_page(page):
+        await context.storage_state(path=str(STATE_FILE))
+        return
 
-    await context.storage_state(path=str(STATE_FILE))
+    Path("debug_after_login.html").write_text(await page.content(), encoding="utf-8")
+    raise RuntimeError(f"Login flow did not reach course page. Current URL: {page.url}")
 
 
 async def main() -> None:
