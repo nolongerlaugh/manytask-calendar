@@ -7,7 +7,7 @@ X-WR-CALNAME:Manytask Deadlines
 X-WR-TIMEZONE:UTC
 BEGIN:VEVENT
 UID:44717c1dcfdd33171e8e72df23c61022@manytask.local
-DTSTAMP:20260508T164658Z
+DTSTAMP:20260508T184636Z
 DTSTART:20260517T205900Z
 DTEND:20260517T215900Z
 SUMMARY:[Manytask] 09-patterns
@@ -27,8 +27,8 @@ TRIGGER:-PT2H
 END:VALARM
 END:VEVENT
 BEGIN:VEVENT
-UID:bd40ad6ef755dafaf3255f8b13120cce@manytask.local
-DTSTAMP:20260508T164658Z
+UID:7bc707083fb55838af0228a9abc946f0@manytask.local
+DTSTAMP:20260508T184636Z
 DTSTART:20260524T205900Z
 DTEND:20260524T215900Z
 SUMMARY:[Manytask] Homework-3
@@ -36,7 +36,7 @@ DESCRIPTION:Section: Homework-3\nTask: redis-server\nStatus: Active\nPercen
  t: 100%
 STATUS:CONFIRMED
 URL:https://gitlab.manytask.org/cpp/public-2026-spring/-/tree/main/redis/re
- dis-server
+ dis-server?ref_type=heads
 BEGIN:VALARM
 ACTION:DISPLAY
 DESCRIPTION:Deadline reminder
@@ -49,15 +49,15 @@ TRIGGER:-PT2H
 END:VALARM
 END:VEVENT
 BEGIN:VEVENT
-UID:e56e7bebf6580a1b26db4c0b1d47ba9c@manytask.local
-DTSTAMP:20260508T164658Z
+UID:aa566eafd14fcff93d12af2bc5223bcb@manytask.local
+DTSTAMP:20260508T184636Z
 DTSTART:20260524T205900Z
 DTEND:20260524T215900Z
 SUMMARY:[Manytask] redis
 DESCRIPTION:Section: redis\nTask: coro\nStatus: Active\nPercent: 100%
 STATUS:CONFIRMED
 URL:https://gitlab.manytask.org/cpp/public-2026-spring/-/tree/main/redis/co
- ro
+ ro?ref_type=heads
 BEGIN:VALARM
 ACTION:DISPLAY
 DESCRIPTION:Deadline reminder
@@ -71,7 +71,7 @@ END:VALARM
 END:VEVENT
 BEGIN:VEVENT
 UID:fc07325d1dfbfaa2d393339e903b2dde@manytask.local
-DTSTAMP:20260508T164658Z
+DTSTAMP:20260508T184636Z
 DTSTART:20260524T205900Z
 DTEND:20260524T215900Z
 SUMMARY:[Manytask] 09-patterns
@@ -91,8 +91,8 @@ TRIGGER:-PT2H
 END:VALARM
 END:VEVENT
 BEGIN:VEVENT
-UID:b56b615a4fe71c8a2b7c2b92fd3b2095@manytask.local
-DTSTAMP:20260508T164658Z
+UID:49f0f17b496eb740f4472f65633e913f@manytask.local
+DTSTAMP:20260508T184636Z
 DTSTART:20260531T205900Z
 DTEND:20260531T215900Z
 SUMMARY:[Manytask] Homework-3
@@ -100,7 +100,7 @@ DESCRIPTION:Section: Homework-3\nTask: redis-server\nStatus: Active\nPercen
  t: 30%
 STATUS:CONFIRMED
 URL:https://gitlab.manytask.org/cpp/public-2026-spring/-/tree/main/redis/re
- dis-server
+ dis-server?ref_type=heads
 BEGIN:VALARM
 ACTION:DISPLAY
 DESCRIPTION:Deadline reminder
@@ -113,15 +113,15 @@ TRIGGER:-PT2H
 END:VALARM
 END:VEVENT
 BEGIN:VEVENT
-UID:bed1300ee74e944432651231ab474d03@manytask.local
-DTSTAMP:20260508T164658Z
+UID:3e87783d1ac6162eedb3865a95ef2a2e@manytask.local
+DTSTAMP:20260508T184636Z
 DTSTART:20260531T205900Z
 DTEND:20260531T215900Z
 SUMMARY:[Manytask] redis
 DESCRIPTION:Section: redis\nTask: coro\nStatus: Active\nPercent: 30%
 STATUS:CONFIRMED
 URL:https://gitlab.manytask.org/cpp/public-2026-spring/-/tree/main/redis/co
- ro
+ ro?ref_type=heads
 BEGIN:VALARM
 ACTION:DISPLAY
 DESCRIPTION:Deadline reminder
