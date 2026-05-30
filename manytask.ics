@@ -7,11 +7,11 @@ X-WR-CALNAME:Manytask Deadlines
 X-WR-TIMEZONE:UTC
 BEGIN:VEVENT
 UID:49f0f17b496eb740f4472f65633e913f@manytask.local
-DTSTAMP:20260530T194308Z
+DTSTAMP:20260530T211629Z
 DTSTART:20260531T205900Z
 DTEND:20260531T215900Z
 SUMMARY:[Manytask] Homework-3
-DESCRIPTION:Section: Homework-3\nTask: redis-server\nStatus: Active\nPercen
+DESCRIPTION:Section: Homework-3\nTask: redis-server\nStatus: Urgent\nPercen
  t: 30%
 STATUS:CONFIRMED
 URL:https://gitlab.manytask.org/cpp/public-2026-spring/-/tree/main/redis/re
@@ -29,11 +29,11 @@ END:VALARM
 END:VEVENT
 BEGIN:VEVENT
 UID:3e87783d1ac6162eedb3865a95ef2a2e@manytask.local
-DTSTAMP:20260530T194308Z
+DTSTAMP:20260530T211629Z
 DTSTART:20260531T205900Z
 DTEND:20260531T215900Z
 SUMMARY:[Manytask] redis
-DESCRIPTION:Section: redis\nTask: coro\nStatus: Active\nPercent: 30%
+DESCRIPTION:Section: redis\nTask: coro\nStatus: Urgent\nPercent: 30%
 STATUS:CONFIRMED
 URL:https://gitlab.manytask.org/cpp/public-2026-spring/-/tree/main/redis/co
  ro?ref_type=heads
